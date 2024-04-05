@@ -1,0 +1,84 @@
+import pandas as pd
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+
+# Load the dataset
+data = pd.read_csv("C:\Python310\Data\EV Stats-1.csv")
+
+# Select only numeric columns for clustering
+numeric_cols = data.select_dtypes(include=[np.number]).columns
+X = data[numeric_cols]
+
+# Standardize the data
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Determine optimal number of clusters using the Elbow method
+def plot_elbow_method(data):
+    distortions = []
+    K = range(1,10)
+    for k in K:
+        kmeanModel = KMeans(n_clusters=k)
+        kmeanModel.fit(data)
+        distortions.append(kmeanModel.inertia_)
+
+    plt.figure(figsize=(10,5))
+    plt.plot(K, distortions, 'bx-')
+    plt.xlabel('k')
+    plt.ylabel('Distortion')
+    plt.title('The Elbow Method showing the optimal k')
+    plt.show()
+
+plot_elbow_method(X_scaled)
+
+# From the elbow method, determine the optimal number of clusters
+optimal_k = 3  # Update this with the optimal number of clusters you find from the elbow method
+
+# Apply K-means clustering
+kmeans = KMeans(n_clusters=optimal_k)
+kmeans.fit(X_scaled)
+clusters = kmeans.predict(X_scaled)
+
+# Add cluster labels to the original dataset
+data['Cluster'] = clusters
+
+# Visualize the clusters using PCA
+from sklearn.decomposition import PCA
+
+pca = PCA(n_components=2)
+X_pca = pca.fit_transform(X_scaled)
+
+plt.figure(figsize=(10, 6))
+plt.scatter(X_pca[:,0], X_pca[:,1], c=clusters, cmap='viridis', s=50, alpha=0.5)
+plt.title('Clustering of EV Market Segmentation (2D PCA)')
+plt.xlabel('Principal Component 1')
+plt.ylabel('Principal Component 2')
+plt.show()
+
+# Now you can analyze the clusters and interpret the results
+
+# Group data by state and calculate total EV usage
+statewise_ev_data = data.groupby('State').sum().reset_index()
+
+# Convert all relevant columns to numeric
+statewise_ev_data.iloc[:, 1:] = statewise_ev_data.iloc[:, 1:].apply(pd.to_numeric, errors='coerce').fillna(0)
+
+# Calculate market share for each category
+total_ev_per_state = statewise_ev_data.iloc[:, 1:].sum(axis=1)
+
+for col in statewise_ev_data.columns[1:]:
+    statewise_ev_data[col + '_Market_Share'] = statewise_ev_data[col] / total_ev_per_state
+
+# Plot state-wise market share of each category
+for col in statewise_ev_data.columns[1::2]:
+    category = col.split('_')[0]
+    plt.figure(figsize=(10, 6))
+    plt.bar(statewise_ev_data['State'], statewise_ev_data[col] * 100, color='skyblue')
+    plt.title('State-wise Market Share of {} EVs'.format(category))
+    plt.xlabel('State')
+    plt.ylabel('Market Share (%)')
+    plt.xticks(rotation=90)
+    plt.tight_layout()
+    plt.show()
